@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeRoute Bangalore | AI Route Planner</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #map { height: calc(100vh - 80px); width: 100%; border-radius: 12px; }
+        .leaflet-container { font-family: 'Inter', sans-serif; }
+        .risk-badge { padding: 2px 8px; border-radius: 4px; font-weight: bold; color: white; }
+        .risk-high { background-color: #ef4444; }
+        .risk-medium { background-color: #f59e0b; }
+        .risk-low { background-color: #10b981; }
+        
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <div class="bg-blue-600 p-2 rounded-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-2.223-1.112a2 2 0 01-1.117-1.788V5a2 2 0 011.117-1.788L9 2m6 18l2.223-1.112a2 2 0 001.117-1.788V5a2 2 0 00-1.117-1.788L15 2m-6 18V2m6 18V2" />
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold text-slate-800 tracking-tight">SafeRoute <span class="text-blue-600">Bangalore</span></h1>
+        </div>
+        <div class="flex gap-3 items-center">
+            <select id="day-select" class="border rounded-md px-3 py-1.5 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+                <option value="Friday">Friday</option>
+                <option value="Saturday">Saturday</option>
+                <option value="Sunday">Sunday</option>
+            </select>
+            <input type="range" id="hour-range" min="0" max="23" value="12" class="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+            <span id="hour-display" class="text-sm font-semibold text-slate-600 w-10">12:00</span>
+            
+            <button id="find-route-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all shadow-md active:scale-95 disabled:opacity-50 text-sm">
+                Plan Route
+            </button>
+            <button id="clear-map-btn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium transition-all text-sm">
+                Clear Map
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <main class="p-4 grid grid-cols-12 gap-4">
+        <!-- Sidebar -->
+        <aside class="col-span-3 space-y-4">
+            <div class="bg-white p-5 rounded-xl shadow-sm border">
+                <h2 class="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    Trip Details
+                </h2>
+                <div class="space-y-3">
+                    <p class="text-[10px] text-slate-400 italic mb-2">Right-click anywhere to check area risk score without affecting route.</p>
+                    <div>
+                        <label class="text-xs uppercase font-bold text-slate-400 mb-1 block">Start</label>
+                        <div id="start-label" class="text-xs text-slate-600 bg-slate-50 p-2 rounded border truncate italic">Click map to set</div>
+                    </div>
+                    <div>
+                        <label class="text-xs uppercase font-bold text-slate-400 mb-1 block">End</label>
+                        <div id="end-label" class="text-xs text-slate-600 bg-slate-50 p-2 rounded border truncate italic">Click map to set</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="route-stats" class="bg-white p-5 rounded-xl shadow-sm border hidden fade-in">
+                <h2 class="font-bold text-slate-700 mb-3 text-sm uppercase tracking-wider">Route Analysis</h2>
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                        <span class="text-xs font-bold text-blue-600">DISTANCE</span>
+                        <span id="stat-dist" class="text-lg font-bold text-blue-700">0.0</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                        <span class="text-xs font-bold text-red-600">AVG RISK</span>
+                        <span id="stat-risk" class="text-lg font-bold text-red-700">0.0</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Map -->
+        <section class="col-span-9 relative">
+            <div id="map"></div>
+            <div id="loading" class="absolute inset-0 bg-white/60 z-[1000] hidden flex items-center justify-center rounded-xl backdrop-blur-[2px]">
+                <div class="bg-white p-6 rounded-2xl shadow-xl border flex flex-col items-center">
+                    <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
+                    <p class="mt-4 font-bold text-slate-800">Calculating Safest Route...</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([12.9716, 77.5946], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        let startMarker = null, endMarker = null, routeLine = null;
+
+        const startLabel = document.getElementById('start-label');
+        const endLabel = document.getElementById('end-label');
+        const hourRange = document.getElementById('hour-range');
+        const hourDisplay = document.getElementById('hour-display');
+
+        hourRange.oninput = () => { hourDisplay.innerText = `${hourRange.value.padStart(2, '0')}:00`; };
+
+        // RIGHT CLICK: Check risk without touching the route
+        map.on('contextmenu', async (e) => {
+            const popup = L.popup().setLatLng(e.latlng).setContent('<div class="p-2 text-xs">Analyzing...</div>').openOn(map);
+            try {
+                const response = await fetch('http://localhost:8000/get-point-risk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lat: e.latlng.lat, lon: e.latlng.lng,
+                        hour: parseInt(hourRange.value),
+                        day: document.getElementById('day-select').value
+                    })
+                });
+                const data = await response.json();
+                const badge = `risk-${data.level.toLowerCase()}`;
+                popup.setContent(`
+                    <div class="p-1 fade-in min-w-[120px]">
+                        <div class="text-[10px] font-bold text-slate-400 uppercase">Risk Level</div>
+                        <div class="text-lg font-black text-slate-800 my-1">${data.risk_score}</div>
+                        <div class="risk-badge ${badge} text-center text-[10px] uppercase">${data.level}</div>
+                    </div>
+                `);
+            } catch (err) { popup.setContent('Error loading risk data.'); }
+        });
+
+        // LEFT CLICK: Manage Markers
+        map.on('click', (e) => {
+            if (!startMarker) {
+                startMarker = L.marker(e.latlng, { draggable: true }).addTo(map).bindPopup("Start");
+                startLabel.innerText = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+                startLabel.classList.remove('italic');
+            } else if (!endMarker) {
+                endMarker = L.marker(e.latlng, { draggable: true }).addTo(map).bindPopup("End");
+                endLabel.innerText = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+                endLabel.classList.remove('italic');
+            }
+        });
+
+        // CLEAR MAP: The only way to reset the view
+        document.getElementById('clear-map-btn').onclick = () => {
+            if (startMarker) map.removeLayer(startMarker);
+            if (endMarker) map.removeLayer(endMarker);
+            if (routeLine) map.removeLayer(routeLine);
+            startMarker = null; endMarker = null; routeLine = null;
+            startLabel.innerText = "Click map to set"; startLabel.classList.add('italic');
+            endLabel.innerText = "Click map to set"; endLabel.classList.add('italic');
+            document.getElementById('route-stats').classList.add('hidden');
+        };
+
+        document.getElementById('find-route-btn').onclick = async () => {
+            if (!startMarker || !endMarker) return alert("Set Start and End first.");
+            
+            document.getElementById('loading').classList.remove('hidden');
+            try {
+                const response = await fetch('http://localhost:8000/get-safe-route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        start_lat: startMarker.getLatLng().lat, start_lon: startMarker.getLatLng().lng,
+                        end_lat: endMarker.getLatLng().lat, end_lon: endMarker.getLatLng().lng,
+                        hour: parseInt(hourRange.value), day: document.getElementById('day-select').value
+                    })
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    if (routeLine) map.removeLayer(routeLine);
+                    routeLine = L.polyline(data.route, { color: '#2563eb', weight: 5, opacity: 0.8 }).addTo(map);
+                    map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
+                    document.getElementById('route-stats').classList.remove('hidden');
+                    document.getElementById('stat-dist').innerText = data.total_distance_km.toFixed(2) + " km";
+                    document.getElementById('stat-risk').innerText = data.total_penalty.toFixed(3);
+                } else { alert(data.message); }
+            } catch (err) { alert("Backend unreachable."); } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        };
+    </script>
+</body>
+</html>
