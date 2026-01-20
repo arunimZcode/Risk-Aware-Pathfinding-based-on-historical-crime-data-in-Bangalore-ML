@@ -18,6 +18,19 @@
         
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Custom marker styling for safety points */
+        .safety-marker {
+            background: white;
+            border: 2px solid #1e40af;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-size: 16px;
+        }
+        .safety-marker.hospital { border-color: #dc2626; }
     </style>
 </head>
 <body class="bg-slate-50 font-sans">
@@ -32,7 +45,33 @@
             </div>
             <h1 class="text-xl font-bold text-slate-800 tracking-tight">SafeRoute <span class="text-blue-600">Bangalore</span></h1>
         </div>
-        <div class="flex gap-3 items-center">
+        
+        <div class="flex gap-4 items-center">
+            <!-- Quick Jump Dropdown -->
+            <select id="area-jump" class="border rounded-md px-3 py-1.5 text-sm bg-blue-50 border-blue-200 text-blue-700 font-medium outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                <option value="" disabled selected>📍 Jump to Area</option>
+                <option value="12.9716,77.5946">MG Road / Central</option>
+                <option value="12.9279,77.6271">Koramangala</option>
+                <option value="12.9141,77.5890">Jayanagar</option>
+                <option value="12.9784,77.6408">Indiranagar</option>
+                <option value="13.0285,77.5896">Hebbal</option>
+                <option value="12.9128,77.6387">HSR Layout</option>
+                <option value="12.9698,77.7499">Whitefield</option>
+                <option value="12.9925,77.5630">Malleshwaram</option>
+                <option value="13.0113,77.5550">Yeshwanthpur</option>
+                <option value="12.8391,77.6766">Electronic City</option>
+            </select>
+
+            <!-- Safety Overlays -->
+            <div class="flex items-center bg-slate-100 rounded-lg p-1 border">
+                <button id="btn-police" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all hover:bg-white flex items-center gap-1">
+                    <span>👮</span> Police
+                </button>
+                <button id="btn-hospitals" class="px-3 py-1.5 text-xs font-bold rounded-md transition-all hover:bg-white flex items-center gap-1">
+                    <span>🏥</span> Hospitals
+                </button>
+            </div>
+
             <select id="day-select" class="border rounded-md px-3 py-1.5 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="Monday">Monday</option>
                 <option value="Tuesday">Tuesday</option>
@@ -42,8 +81,11 @@
                 <option value="Saturday">Saturday</option>
                 <option value="Sunday">Sunday</option>
             </select>
-            <input type="range" id="hour-range" min="0" max="23" value="12" class="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-            <span id="hour-display" class="text-sm font-semibold text-slate-600 w-10">12:00</span>
+            
+            <div class="flex items-center gap-2">
+                <input type="range" id="hour-range" min="0" max="23" value="12" class="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                <span id="hour-display" class="text-sm font-semibold text-slate-600 w-10 text-center">12:00</span>
+            </div>
             
             <button id="find-route-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all shadow-md active:scale-95 disabled:opacity-50 text-sm">
                 Plan Route
@@ -59,35 +101,42 @@
         <!-- Sidebar -->
         <aside class="col-span-3 space-y-4">
             <div class="bg-white p-5 rounded-xl shadow-sm border">
-                <h2 class="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                <h2 class="font-bold text-slate-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                     Trip Details
                 </h2>
                 <div class="space-y-3">
-                    <p class="text-[10px] text-slate-400 italic mb-2">Right-click anywhere to check area risk score without affecting route.</p>
+                    <p class="text-[10px] text-slate-400 italic mb-2 leading-tight">Right-click anywhere to check area risk score. Use buttons above to show safety points.</p>
                     <div>
-                        <label class="text-xs uppercase font-bold text-slate-400 mb-1 block">Start</label>
+                        <label class="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Start Location</label>
                         <div id="start-label" class="text-xs text-slate-600 bg-slate-50 p-2 rounded border truncate italic">Click map to set</div>
                     </div>
                     <div>
-                        <label class="text-xs uppercase font-bold text-slate-400 mb-1 block">End</label>
+                        <label class="text-[10px] uppercase font-bold text-slate-400 mb-1 block">End Location</label>
                         <div id="end-label" class="text-xs text-slate-600 bg-slate-50 p-2 rounded border truncate italic">Click map to set</div>
                     </div>
                 </div>
             </div>
 
             <div id="route-stats" class="bg-white p-5 rounded-xl shadow-sm border hidden fade-in">
-                <h2 class="font-bold text-slate-700 mb-3 text-sm uppercase tracking-wider">Route Analysis</h2>
+                <h2 class="font-bold text-slate-700 mb-3 text-xs uppercase tracking-wider">Route Analysis</h2>
                 <div class="space-y-3">
                     <div class="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                        <span class="text-xs font-bold text-blue-600">DISTANCE</span>
-                        <span id="stat-dist" class="text-lg font-bold text-blue-700">0.0</span>
+                        <span class="text-[10px] font-bold text-blue-600 uppercase">Distance</span>
+                        <span id="stat-dist" class="text-lg font-bold text-blue-700">0.0 km</span>
                     </div>
                     <div class="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                        <span class="text-xs font-bold text-red-600">AVG RISK</span>
+                        <span class="text-[10px] font-bold text-red-600 uppercase">Avg Risk</span>
                         <span id="stat-risk" class="text-lg font-bold text-red-700">0.0</span>
                     </div>
                 </div>
+            </div>
+            
+            <div class="bg-slate-800 text-white p-4 rounded-xl shadow-lg border-t-4 border-blue-500">
+                <h3 class="text-xs font-bold uppercase tracking-widest text-blue-400 mb-2">Safety Tip</h3>
+                <p class="text-[11px] leading-relaxed opacity-80">
+                    Always share your live location with a trusted contact when traveling through high-risk zones after dark.
+                </p>
             </div>
         </aside>
 
@@ -111,15 +160,74 @@
         }).addTo(map);
 
         let startMarker = null, endMarker = null, routeLine = null;
+        let safetyLayer = L.layerGroup().addTo(map);
 
         const startLabel = document.getElementById('start-label');
         const endLabel = document.getElementById('end-label');
         const hourRange = document.getElementById('hour-range');
         const hourDisplay = document.getElementById('hour-display');
+        const areaJump = document.getElementById('area-jump');
 
         hourRange.oninput = () => { hourDisplay.innerText = `${hourRange.value.padStart(2, '0')}:00`; };
 
-        // RIGHT CLICK: Check risk without touching the route
+        // Handle Area Jump
+        areaJump.onchange = (e) => {
+            const [lat, lon] = e.target.value.split(',').map(Number);
+            map.flyTo([lat, lon], 15, {
+                duration: 1.5
+            });
+            // Reset the dropdown label after jump
+            setTimeout(() => { e.target.selectedIndex = 0; }, 2000);
+        };
+
+        /**
+         * Fetch Safety Data from Overpass API
+         */
+        async function toggleSafetyPOIs(type) {
+            const bounds = map.getBounds();
+            const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+            
+            const amenity = type === 'police' ? 'police' : 'hospital';
+            const iconEmoji = type === 'police' ? '👮' : '🏥';
+            const markerClass = type === 'hospital' ? 'safety-marker hospital' : 'safety-marker';
+
+            safetyLayer.clearLayers();
+
+            const query = `[out:json][timeout:25];node["amenity"="${amenity}"](${bbox});out body;`;
+            const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                if (data.elements.length === 0) {
+                    alert(`No ${type} stations found in the current map area.`);
+                    return;
+                }
+
+                data.elements.forEach(el => {
+                    const marker = L.marker([el.lat, el.lon], {
+                        icon: L.divIcon({
+                            className: markerClass,
+                            html: `<div>${iconEmoji}</div>`,
+                            iconSize: [32, 32]
+                        })
+                    }).bindPopup(`
+                        <div class="font-sans">
+                            <b class="text-blue-700 text-sm">${el.tags.name || type.toUpperCase()}</b>
+                            <div class="text-[10px] text-slate-500 mt-1">${type} station</div>
+                        </div>
+                    `);
+                    safetyLayer.addLayer(marker);
+                });
+            } catch (err) {
+                console.error("Overpass Fetch Error:", err);
+            }
+        }
+
+        document.getElementById('btn-police').onclick = () => toggleSafetyPOIs('police');
+        document.getElementById('btn-hospitals').onclick = () => toggleSafetyPOIs('hospital');
+
         map.on('contextmenu', async (e) => {
             const popup = L.popup().setLatLng(e.latlng).setContent('<div class="p-2 text-xs">Analyzing...</div>').openOn(map);
             try {
@@ -137,14 +245,13 @@
                 popup.setContent(`
                     <div class="p-1 fade-in min-w-[120px]">
                         <div class="text-[10px] font-bold text-slate-400 uppercase">Risk Level</div>
-                        <div class="text-lg font-black text-slate-800 my-1">${data.risk_score}</div>
+                        <div class="text-lg font-black text-slate-800 my-1">${data.risk_score.toFixed(4)}</div>
                         <div class="risk-badge ${badge} text-center text-[10px] uppercase">${data.level}</div>
                     </div>
                 `);
             } catch (err) { popup.setContent('Error loading risk data.'); }
         });
 
-        // LEFT CLICK: Manage Markers
         map.on('click', (e) => {
             if (!startMarker) {
                 startMarker = L.marker(e.latlng, { draggable: true }).addTo(map).bindPopup("Start");
@@ -157,11 +264,11 @@
             }
         });
 
-        // CLEAR MAP: The only way to reset the view
         document.getElementById('clear-map-btn').onclick = () => {
             if (startMarker) map.removeLayer(startMarker);
             if (endMarker) map.removeLayer(endMarker);
             if (routeLine) map.removeLayer(routeLine);
+            safetyLayer.clearLayers();
             startMarker = null; endMarker = null; routeLine = null;
             startLabel.innerText = "Click map to set"; startLabel.classList.add('italic');
             endLabel.innerText = "Click map to set"; endLabel.classList.add('italic');

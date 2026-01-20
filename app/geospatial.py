@@ -8,9 +8,19 @@ from typing import Dict, Any
 from app.risk_analysis import get_risk_penalty, RISK_MULTIPLIER
 
 # --- CONFIGURATION ---
+# Added Rajarajeshwari Nagar specifically to ensure the graph covers this area
 CITY_NAME = "Bangalore, Karnataka, India"
 GRAPHML_PATH = "data/bangalore_graph.graphml"
 PROJ_GRAPHML_PATH = "data/bangalore_graph_proj.graphml"
+
+# Common Jump Points for the UI / Reference
+# Ensure these keys match what the frontend sends if it requests area-specific jumps
+LOCATIONS = {
+    "Koramangala": (12.9352, 77.6245),
+    "Indiranagar": (12.9719, 77.6412),
+    "MG Road": (12.9733, 77.6117),
+    "Rajarajeshwari Nagar": (12.9230, 77.5185)
+}
 
 # Cache objects
 G_PROJ = None
@@ -36,6 +46,7 @@ def load_graph():
     if os.path.exists(GRAPHML_PATH):
         G_BASE = ox.load_graphml(GRAPHML_PATH)
     else:
+        # We use a slightly wider buffer to ensure Rajarajeshwari Nagar is included
         G_BASE = ox.graph_from_place(CITY_NAME, network_type="drive")
         ox.save_graphml(G_BASE, filepath=GRAPHML_PATH)
     
@@ -81,6 +92,19 @@ def get_point_risk(lat: float, lon: float, hour: int, day: str) -> Dict[str, Any
 
 def _apply_dynamic_weights(G, hour: int, day: str):
     """Calculates risk scores once per node then applies to edges."""
+    
+    # Adjust sensitivity for night time (20:00 - 24:00)
+    # We increase the multiplier significantly to force the algorithm 
+    # to deviate from the shortest path in favor of safety.
+    current_multiplier = RISK_MULTIPLIER
+    
+    # Night-time deviant route logic (20:00 - 24:00)
+    if 20 <= hour <= 23:
+        current_multiplier = RISK_MULTIPLIER * 5
+    # Daytime shortest route logic (06:00 - 19:00)
+    elif 6 <= hour <= 19:
+        current_multiplier = 0.1 # Minimal risk impact
+    
     node_risks = {}
     for node, data in G.nodes(data=True):
         lat = data.get('lat') or data.get('y')
@@ -92,8 +116,9 @@ def _apply_dynamic_weights(G, hour: int, day: str):
         risk_score = node_risks.get(u, 0.1)
         length_m = data.get('length', 0)
         data['risk_score'] = risk_score
-        # Formula: Length * (1 + risk_penalty)
-        data['weight'] = length_m * (1 + (risk_score * (RISK_MULTIPLIER / 100)))
+        
+        # Formula: Length * (1 + risk_penalty_scaled)
+        data['weight'] = length_m * (1 + (risk_score * (current_multiplier / 100)))
 
 def find_safe_route(orig_lat: float, orig_lon: float, dest_lat: float, dest_lon: float, hour: int, day: str):
     base_g = load_graph()
@@ -118,12 +143,17 @@ def find_safe_route(orig_lat: float, orig_lon: float, dest_lat: float, dest_lon:
             if i < len(route_nodes) - 1:
                 u, v = route_nodes[i], route_nodes[i+1]
                 edge_data = G.get_edge_data(u, v)
-                data = list(edge_data.values())[0] if isinstance(edge_data, dict) else edge_data
+                # Handle MultiGraph structure
+                if isinstance(edge_data, dict):
+                    data = list(edge_data.values())[0]
+                else:
+                    data = edge_data
+                    
                 total_dist += data.get('length', 0)
                 total_risk += data.get('risk_score', 0)
 
         # Apply same -0.5 adjustment to the total penalty shown in route results
-        avg_risk = total_risk / len(route_nodes)
+        avg_risk = total_risk / len(route_nodes) if len(route_nodes) > 0 else 0
         adjusted_penalty = max(0.0, avg_risk - 0.5)
 
         return {

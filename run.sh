@@ -40,3 +40,8 @@ echo "------------------------------------------------"
 We run main.app where 'main' is the filename and 'app' is the FastAPI instance
 
 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+
+to run:
+python -m uvicorn app.main:app --reload
+then click on the index.html on the folder to open in browser.
